@@ -44,7 +44,7 @@
     <Compile Include="ClientRollup.cs" />
     <Compile Include="Coordinator.cs" />
     <Compile Include="Interfaces\IClient.cs" />
-    <Compile Include="Interfaces\IClientRollUp.cs" />
+    <Compile Include="Interfaces\IClientBalancer.cs" />
     <Compile Include="Interfaces\ICoordinator.cs" />
     <Compile Include="Interfaces\IRequest.cs" />
     <Compile Include="Models\Response.cs" />
