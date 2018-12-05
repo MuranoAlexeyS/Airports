@@ -37,9 +37,8 @@ namespace Airports.Contract
 
         public async Task<string> GetToken(T request)
         {
-            var tcs  = new TaskCompletionSource<string>();
             var id = request.GetIdentifier();
-            tcs.SetResult(id);
+            Task<string> tr = Task.FromResult(id);
             var token = _counters.GetOrAdd(id, new Token<V>(id));
             if (!token.Requested()) {
                 token =_counters.AddOrUpdate(id, new Token<V>(id), (i, o) => {
@@ -48,7 +47,7 @@ namespace Airports.Contract
                 });
             }
             RunClient(token, request);
-            return await tcs.Task;
+            return await tr;
         }
 
         private void  RunClient(Token<V> token, T request) {
@@ -74,17 +73,17 @@ namespace Airports.Contract
 
         public async Task<Response<V>> Result(string id) 
         {
-            var tcs = new TaskCompletionSource<Response<V>>();
+            Task<Response<V>> tr;
             Token<V> token = null;
             _counters.TryGetValue(id, out token);
             if (token != null) {
                 if (token.Data == null)
                 {
-                    tcs.SetResult(new Response<V>(ResponseState.Processed, default(V)));
+                  tr = Task.FromResult(new Response<V>(ResponseState.Processed, default(V)));
                 }
                 else
                 {
-                    tcs.SetResult(new Response<V>(ResponseState.Readed, token.Data));
+                    tr = Task.FromResult(new Response<V>(ResponseState.Readed, token.Data));
                     if (token.Readed())
                     {
                         if (token.NotRemoved())
@@ -96,9 +95,9 @@ namespace Airports.Contract
                 }
             }
             else {
-                tcs.SetResult(new Response<V>(ResponseState.Deleted, default(V)));
+                tr = Task.FromResult(new Response<V>(ResponseState.Deleted, default(V)));
             }
-            return await tcs.Task;
+            return await tr;
         }
         private class Token<V>  : IDisposable
         {
