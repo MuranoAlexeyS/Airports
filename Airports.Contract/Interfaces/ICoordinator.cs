@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace Airports.Contract.Interfaces
 {
-    public interface ICoordinator<T,V>
+    public interface ICoordinator<T, V>
     {
         Task<string> GetToken(T request);
         Task<V> Result(string token);
-        void Cancel(string token);
+        Task Cancel(string token);
     }
 }

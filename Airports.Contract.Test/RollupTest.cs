@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Tests
 {
-    public class Tests
+    public class RollupTest
     {
         private Mock<IClient<RequestMoq, ResponseMoq>>[] _moqClients;
         private TestRollup _rollup;
@@ -24,7 +24,7 @@ namespace Tests
         }
 
         [Test]
-        public void Test1()
+        public void TestRoll()
         {
 
             var token = new CancellationTokenSource().Token;

@@ -6,6 +6,5 @@
         Processed,
         Readed,
         Deleted,
-        Canceled,
     }
 }
