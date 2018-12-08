@@ -7,8 +7,9 @@ using System.Threading.Tasks;
 
 namespace Airports.Contract.Interfaces
 {
-    public interface IClient<T,V>
+    public interface IClient<T, V>
     {
         Task<V> AskAsync(T request, CancellationToken cancellationToken);
+        string ClientName { get; }
     }
 }
