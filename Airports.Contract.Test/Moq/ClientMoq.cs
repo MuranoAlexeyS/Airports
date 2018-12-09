@@ -15,7 +15,7 @@ namespace Airports.Contract.Test.Moq
         /// <param name="wait">full time ms for emulate async</param>
         /// <param name="resStrategy">can be string text or throw error</param>
         /// <returns></returns>
-        public static Mock<IClient<RequestMoq, ResponseMoq>> Get(int wait, Func<string> nameStrategy, Func<string> resStrategy, bool verifiable = true)
+        public static Mock<IClient<RequestMoq, ResponseMoq>> Get( Func<string> nameStrategy, Func<string> resStrategy, int wait = 1, bool verifiable = true)
         {
             var mock = new Mock<IClient<RequestMoq, ResponseMoq>>();
             mock.SetupGet(x => x.ClientName).Returns(nameStrategy);

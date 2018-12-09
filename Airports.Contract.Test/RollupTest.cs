@@ -19,7 +19,7 @@ namespace Tests
         [SetUp]
         public void Setup()
         {
-            _moqClients = Enumerable.Range(0, _clientCount).Select(x => ClientMoq.Get(1, () => "", () => x.ToString())).ToArray();
+            _moqClients = Enumerable.Range(0, _clientCount).Select(x => ClientMoq.Get(() => "", () => x.ToString())).ToArray();
             _rollup = new TestRollup(_moqClients.Select(x => x.Object));
         }
 

@@ -7,25 +7,30 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 
 namespace Airports.Contract
 {
-    public abstract class Coordinator<T, V> : ICoordinator<T, Response<V>> where T : class, IRequest
+    public abstract class ReduceCoordinator<T, V> : ICoordinator<T, Response<V>> where T : class, IRequest
     {
-        public Coordinator(IClientBalancer<T, V> clients)
+        public ReduceCoordinator(IClientBalancer<T, V> clients, TimeSpan expirate)
         {
             this._clients = clients;
+            this._expirate = expirate;
+            _removeAction = (x, y) => TryRemove(x, y);
         }
 
         private readonly IClientBalancer<T, V> _clients;
         private readonly ConcurrentDictionary<string, Token<V>> _counters = new ConcurrentDictionary<string, Token<V>>();
+        private readonly Func<Token<V>, string, bool> _removeAction;
+        private readonly TimeSpan _expirate;
 
         public async Task<string> GetToken(T request)
         {
-            var id = request.GetIdentifier();
-            var newToken = new Token<V>(id);
+            var hashId= request.GetIdentifier() ;
+            var newToken = new Token<V>(hashId, _expirate, _removeAction);
             newToken.IsRequested();
-            var token = _counters.GetOrAdd(id, newToken);
+            var token = _counters.GetOrAdd(hashId, newToken);
             bool added = false;
             added = token.Equals(newToken) || token.IsRequested();
             if (!added)
@@ -34,10 +39,11 @@ namespace Airports.Contract
                 {
                     token.BlockingAction(() =>
                     {
-                        token = _counters.AddOrUpdate(id, newToken, (x, o) => newToken);
+                        token = _counters.AddOrUpdate(hashId, newToken, (x, o) => newToken);
                         if (token.Equals(newToken))
                         {
-                            OnRemove(id);
+                            OnRemove(hashId);
+                            token.Dispose();
                         }
                     });
                 }
@@ -45,7 +51,7 @@ namespace Airports.Contract
                 {
                     token.BlockingAction(() =>
                     {
-                        token = _counters.GetOrAdd(id, newToken);
+                        token = _counters.GetOrAdd(hashId, newToken);
                         if (token.Equals(newToken))
                         {
                             OnAdd(request);
@@ -57,29 +63,29 @@ namespace Airports.Contract
             {
                 OnAdd(request);
             }
-            RunClient(token, request);
-            return await Task.FromResult(id); ;
+            await RunClient(token, request);
+            return await Task.FromResult(hashId); ;
         }
 
-        public async Task Cancel(string id)
+        public async Task Cancel(string hashId)
         {
             Token<V> token = null;
-            _counters.TryGetValue(id, out token);
+            _counters.TryGetValue(hashId, out token);
             if (token != null)
             {
                 if (token.IsCancel(false))
                 {
-                    TryRemove(token, id);
+                    TryRemove(token, hashId);
                 }
             }
             await Task.CompletedTask;
         }
 
-        public async Task<Response<V>> Result(string id)
+        public async Task<Response<V>> Result(string hashId)
         {
             Task<Response<V>> tr;
             Token<V> token = null;
-            _counters.TryGetValue(id, out token);
+            _counters.TryGetValue(hashId, out token);
             if (token != null)
             {
                 tr = Task.FromResult(new Response<V>(ResponseState.Processed, default(V)));
@@ -88,7 +94,7 @@ namespace Airports.Contract
                     tr = Task.FromResult(new Response<V>(ResponseState.Readed, token.Data));
                     if (token.IsReaded())
                     {
-                        if (!TryRemove(token, id))
+                        if (!TryRemove(token, hashId))
                         {
                             tr = Task.FromResult(new Response<V>(ResponseState.Processed, default(V)));
                         }
@@ -101,71 +107,102 @@ namespace Airports.Contract
             }
             return await tr;
         }
-        private void RunClient(Token<V> token, T request)
+        public async Task<V> ResultAsync(string hashId)
         {
+            Token<V> token = null;
+            _counters.TryGetValue(hashId, out token);
+            if (token != null)
+            {
+                var data = await token.Awaiting();
+                OnRead(hashId);
+                if (token.IsReaded())
+                {
+                    TryRemove(token, hashId);
+                    OnRemove(hashId);
+                    token.Dispose();
+                }                
+            }
+            return await Task.FromResult(default(V));
+        }
+        private async Task RunClient(Token<V> token, T request)
+        { 
             if (token.Init())
             {
-                Task.Run(async () =>
-                {
-                    var client = _clients.GetNext();
-                    try
-                    {
-                        var tr = client.AskAsync(request, token.CancelToken);
-                        token.Data = await tr;
-                        OnComplete(request, token.Data);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        CancelError(token, request);
-                        OnCancel(request);
-                    }
-                    catch (Exception ex)
-                    {
-                        CancelError(token, request);
-                        OnError(request, client.ClientName, ex);
-                    }
-                }).ConfigureAwait(false);
+
+                token.Awaiter = Task.Run(async () =>
+                  {
+                      var client = _clients.GetNext();
+                      try
+                      {
+                          var tr = client.AskAsync(request, token.CancelToken).ConfigureAwait(false);
+                          token.Data = await tr;
+                          OnComplete(request, token.Data);
+                      }
+                      catch (OperationCanceledException)
+                      {
+                          CancelError(token, request);
+                          OnCancel(request);
+                      }
+                      catch (Exception ex)
+                      {
+                          CancelError(token, request);
+                          OnError(request, client.ClientName, ex);
+                      }
+                  });
             }
+            await Task.CompletedTask;
         }
 
         private void CancelError(Token<V> token, T request)
         {
-            string id = request.GetIdentifier();
+            string hashId= request.GetIdentifier();
             token.IsCancel(true);
-            TryRemove(token, id);
+            TryRemove(token, hashId);
         }
-        private bool TryRemove(Token<V> token, string id)
+        private bool TryRemove(Token<V> token, string hashId)
         {
             bool can = token.IsNotRemoved();
             if (can)
             {
                 token.BlockingAction(() =>
                 {
-                    if (_counters.TryRemove(id, out _))
-                    {
-                        OnRemove(id);
-                    }
+                    _counters.TryRemove(hashId, out _);
                 });
+                OnRemove(hashId);
+                token.Dispose();
             }
             return can;
         }
         public virtual void OnCancel(T request) { }
-        public virtual void OnRead(string id) { }
+        public virtual void OnRead(string hashId) { }
         public virtual void OnError(T req, string client, Exception ex) { }
-        public virtual void OnRemove(string id) { }
+        public virtual void OnRemove(string hashId) { }
         public virtual void OnAdd(T request) { }
         public virtual void OnComplete(T request, V response) { }
 
-        private class Token<V>
+        private class Token<V> : IDisposable
         {
-            internal Token(string token)
+            internal Token(string hashId, TimeSpan expire, Func<Token<V>, string,bool> removeAction)
             {
                 _source = new CancellationTokenSource();
                 CancelToken = _source.Token;
-                _token = token;
+                _id = hashId;
+                _timer = new System.Timers.Timer(expire.TotalMilliseconds);
+                _timer.AutoReset = false;
+                _timer.Elapsed += (s,e) =>
+                {
+                    if (_setter == 1)
+                    {
+                        removeAction(this, _id);
+                        _timer.Stop();
+                    }
+                    else { _timer.Start(); }
+                }; 
+                _timer.Start();
             }
-
-            private readonly string _token;
+            private Task _awaiter;
+            private readonly string _id;
+            private readonly System.Timers.Timer _timer;
             private readonly CancellationTokenSource _source;
             private int _flag = 0;
             private int _counter = 0;
@@ -176,16 +213,12 @@ namespace Airports.Contract
 
             internal V Data
             {
-                get { return _data; }
-                set
-                {
-                    if (Interlocked.Exchange(ref _setter, 1) == 0)
-                    {
-                        _data = value;
-                    }
-                }
+                get => _data; 
+                set => _data = Interlocked.CompareExchange(ref _setter, 1, 0) == 0 ? value: _data;
             }
             internal CancellationToken CancelToken { get; }
+
+            public Task Awaiter { set => _awaiter = value; }
 
             internal bool Init()
             {
@@ -203,12 +236,11 @@ namespace Airports.Contract
                     return CounterLockAction(() =>
                     {
                         if (Interlocked.Increment(ref _counter) > 0)
-                        {
+                        { 
                             return true;
                         }
                         else
                         {
-                            Interlocked.Decrement(ref _counter);
                             return false;
                         }
                     }, false);
@@ -304,11 +336,16 @@ namespace Airports.Contract
                 }
                 return success;
             }
-            ~Token()
-            {
-                if (_lock != null) _lock.Dispose();
-                if (_source != null) _source.Dispose();
+            internal async Task<V> Awaiting() {
+                await _awaiter;
+                return await Task.FromResult(_data);
             }
+            public void Dispose()
+            {
+                _lock?.Dispose();
+                _source?.Dispose();
+                _timer?.Dispose();
+            }            
         }
     }
 }

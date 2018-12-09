@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Airports.Contract.Test.Moq
 {
-    public class TestedCoordinator : Coordinator<RequestMoq, ResponseMoq>
+    public class TestedCoordinator : ReduceCoordinator<RequestMoq, ResponseMoq>
     {
         private readonly Action<RequestMoq, string, Exception> _onError;
         private readonly Action<RequestMoq> _onCancel;
@@ -15,14 +15,15 @@ namespace Airports.Contract.Test.Moq
         private readonly Action<RequestMoq, ResponseMoq> _onComplete;
         private readonly Action<string> _onRemove;
         private readonly Action<string> _onRead;
+        
 
-        public TestedCoordinator(IClientBalancer<RequestMoq, ResponseMoq> clients,
+        public TestedCoordinator(IClientBalancer<RequestMoq, ResponseMoq> clients,  
             Action<RequestMoq, string, Exception> onError = null,
             Action<RequestMoq> onCancel = null,
             Action<RequestMoq> onAdd = null,
             Action<RequestMoq, ResponseMoq> onComplete = null,
             Action<string> onRemove = null,
-            Action<string> onRead = null) : base(clients)
+            Action<string> onRead = null, int msLife = 1000) : base(clients, new TimeSpan(0,0,0,msLife))
         {
             this._onError = onError;
             this._onCancel = onCancel;

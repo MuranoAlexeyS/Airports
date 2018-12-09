@@ -5,75 +5,57 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Airports.Contract.Test
 {
 
-    public class TestAwaitable : IDisposable
+    public class TestAwaitable
     {
-        private readonly TestAwaiter _awaiter = new TestAwaiter();
-        private System.Timers.Timer killTimer;
-        public TestAwaitable(double ms, bool isDebug = false)
+        private readonly int _ms;
+        private readonly TaskCompletionSource<bool> _tcs;
+        private readonly CancellationTokenSource _cts;
+        public TestAwaitable(int ms, bool isDebug = false)
         {
-            if (!isDebug)
-            {
-                killTimer = new System.Timers.Timer(ms);
-                killTimer.Elapsed += (s, e) => Fail("Time is out");
-                killTimer.AutoReset = false;
-                killTimer.Start();
-            }
+            _ms = ms;
+            _tcs = new TaskCompletionSource<bool>();
+            _cts = new CancellationTokenSource();
         }
+
         public void Complete()
         {
-            _awaiter.Complete();
-            Dispose();
-            killTimer = null;
+            _tcs.SetResult(true);
+            _cts.Cancel();
         }
-
-        public void Dispose()
-        {
-            killTimer?.Dispose();
-        }
-
+        private async Task<bool> Wait(){
+            try
+            {
+                await Task.Delay(_ms, _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (_tcs.Task.IsCompleted)
+                {
+                    return await _tcs.Task;
+                }
+            }
+            return false;
+        } 
         public void Fail(string message)
         {
-            _awaiter.Complete();
+            _tcs.SetResult(false);
+            _cts.Cancel();
             Assert.Fail(message);
         }
 
-        public TestAwaiter GetAwaiter()
+        public async Task <bool> Awaiter()
         {
-            return _awaiter;
-        }
-        public class TestAwaiter : INotifyCompletion
-        {
-            private Action _continuation;
-
-            public TestAwaiter()
-            {
-                IsCompleted = false;
+            var result = await Task.WhenAny(Wait(), _tcs.Task);
+            var isOk = await result;
+            if (!isOk) {
+                Assert.Fail("Time is out");
             }
-
-            public bool IsCompleted { get; private set; }
-
-            public void GetResult()
-            {
-                // Nothing to return.
-            }
-
-            public void Complete()
-            {
-                if (_continuation != null)
-                {
-                    _continuation();
-                    IsCompleted = true;
-                }
-            }
-
-            public void OnCompleted(Action continuation)
-            {
-                _continuation += continuation;
-            }
+            return isOk;
         }
     }
 }
