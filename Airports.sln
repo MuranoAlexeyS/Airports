@@ -9,8 +9,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Airports.Contract.Test", "A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Airports.Service", "Airports.Service\Airports.Service.csproj", "{ABD9F39B-8041-4F5F-BE79-25E4E89AE563}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Airports.Bll", "Airports.ApiProxy\Airports.Bll.csproj", "{F8B96008-80C7-4DFA-9805-A87854B2CED8}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,10 +27,6 @@ Global
 		{ABD9F39B-8041-4F5F-BE79-25E4E89AE563}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABD9F39B-8041-4F5F-BE79-25E4E89AE563}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ABD9F39B-8041-4F5F-BE79-25E4E89AE563}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F8B96008-80C7-4DFA-9805-A87854B2CED8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F8B96008-80C7-4DFA-9805-A87854B2CED8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F8B96008-80C7-4DFA-9805-A87854B2CED8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F8B96008-80C7-4DFA-9805-A87854B2CED8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

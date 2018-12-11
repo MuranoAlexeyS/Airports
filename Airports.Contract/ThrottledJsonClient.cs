@@ -65,7 +65,7 @@ namespace Airports.Contract
                 catch (Exception ex)
                 {
                     Interlocked.Exchange(ref _startLock, 0);
-                    _logger.LogError(ex, "Throttled Request error");
+                    _logger.LogError(ex, "Throttled process error");
                 }
             }
         }

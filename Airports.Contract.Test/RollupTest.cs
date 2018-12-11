@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Tests
+namespace Airports.Contract.Test
 {
     public class RollupTest
     {

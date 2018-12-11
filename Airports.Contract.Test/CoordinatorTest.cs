@@ -14,9 +14,10 @@ namespace Airports.Contract.Test
 {
     class CoordinatorTest
     {
+        const int requestCount = 1 << 16;
         private int _simpleTestReadCounter = 0;
         [Test]
-        [TestCase(1 << 12)]
+        [TestCase(requestCount)]
         public async Task SimpleTest(int count)
         {
             var waiter = new TestAwaitable(count);
@@ -30,20 +31,7 @@ namespace Airports.Contract.Test
                         waiter.Complete();
                     }
                 });
-            var list = await Task.WhenAll(Enumerable.Range(0, count).AsParallel().Select((x) => coord.GetToken(new RequestMoq(x.ToString()))).ToList());
-            await waiter.Awaiter();
-            var part = (await Task.WhenAll(list.AsParallel().Select(async x =>
-              {
-                  var t = coord.Result(x);
-                  var r = await t;
-                  if (r.GetState() == Models.ResponseState.Readed)
-                  {
-                      Assert.IsTrue(r.GetData() != null);
-                      Assert.IsTrue(!string.IsNullOrEmpty(r.GetData().Data));
-                  }
-                  return new { request = x, response = r };
-              }).ToList()));
-
+            await SuccessResults(count, waiter, coord, x => x.ToString());
             moqClients.ForEach(x => x.Verify(y => y.AskAsync(It.IsAny<RequestMoq>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce));
             await Task.CompletedTask;
         }
@@ -67,6 +55,7 @@ namespace Airports.Contract.Test
             Assert.IsTrue(r.GetState() == Models.ResponseState.Deleted);
             await Task.CompletedTask;
         }
+
         private int _repeatTestReadCounter = 0;
         [Test]
         [TestCase(1 << 12)]
@@ -82,16 +71,7 @@ namespace Airports.Contract.Test
                     waiter.Complete();
                 }
             });
-
-            var list = await Task.WhenAll(Enumerable.Range(0, (count)).AsParallel().Select((x) => coord.GetToken(new RequestMoq((x % 2).ToString()))).ToList());
-            await waiter.Awaiter();
-            var part = (await Task.WhenAll(list.AsParallel().Select(async x =>
-             {
-                 var t = coord.Result(x);
-                 var r = await t;
-                 return new { req = x, response = r };
-             }).ToList()));
-            Assert.IsTrue(part.All(x => x.response.GetState() == Models.ResponseState.Readed));
+            await SuccessResults(count, waiter, coord, x => (x % 2).ToString());
             foreach (var x in clients)
             {
                 x.Verify(y => y.AskAsync(It.IsAny<RequestMoq>(), It.IsAny<CancellationToken>()), Times.AtMost(2));
@@ -108,7 +88,7 @@ namespace Airports.Contract.Test
             int failMod = 7;
             int cancelMod = 13;
             int requestMod = 23;
-           // var waiter = new TestAwaitable(1);
+            // var waiter = new TestAwaitable(1);
             var clients = Enumerable.Range(0, 35).Select(x => ClientMoq.Get(() => x % failMod == 0 ? "fail" : "good", () =>
          {
              if (x % failMod == 0)
@@ -179,7 +159,7 @@ namespace Airports.Contract.Test
                 {
                     if (!(requestWithErrors.Contains(group.Key.ToString()) || requestWithCancel.Contains(group.Key.ToString())))
                     {
-                        await Task.Run(() => Assert.Fail($"Invaild Error for {group.Key}"));
+                        Assert.Fail($"Invaild Error for {group.Key}");
                     }
                 }
             }
@@ -187,13 +167,15 @@ namespace Airports.Contract.Test
             await Task.CompletedTask;
 
         }
+
         private int _lifeTestCounter;
         [Test]
-        [TestCase(1 << 12)]
-        public async Task LifeTimeTest(int count) {
+        [TestCase(1 << 8)]
+        public async Task LifeTimeTest(int count)
+        {
             int failMod = 7;
             int cancelMod = 13;
-            var waiter = new TestAwaitable(count);
+
             var clients = Enumerable.Range(0, 35).Select(x => ClientMoq.Get(() => x % failMod == 0 ? "fail" : "good", () =>
             {
                 if (x % failMod == 0)
@@ -207,6 +189,7 @@ namespace Airports.Contract.Test
                 return x.ToString();
             }).Object);
             var rollup = new TestRollup(clients);
+            var waiter = new TestAwaitable(5000);
             var coord = new TestedCoordinator(rollup,
                 onRemove: (x) =>
                 {
@@ -218,8 +201,23 @@ namespace Airports.Contract.Test
             var list = await Task.WhenAll(Enumerable.Range(0, count).AsParallel()
                 .Select((x) => coord.GetToken(new RequestMoq(x.ToString()))).ToList());
             await waiter.Awaiter();
-            await Task.CompletedTask;
             Assert.IsTrue(_lifeTestCounter == count);
+            await Task.CompletedTask;
+        }
+        private static async Task SuccessResults(int count, TestAwaitable waiter, TestedCoordinator coord, Func<int, string> requestFunc)
+        {
+            var list = Task.WhenAll(Enumerable.Range(0, count).AsParallel()
+                .Select(async (x) => await coord.GetToken(new RequestMoq(requestFunc(x))))
+                .Select(async (req) =>
+                {
+                    var y = await req;
+                    var t = coord.ResultAsync(y);
+                    var r = await t;
+                    return new { request = y, response = r };
+                }));
+            await waiter.Awaiter();
+            var result = await list;
+            Assert.IsTrue(result.All(x => x?.response != null));
         }
     }
 }

@@ -27,7 +27,7 @@ namespace Airports.Contract
 
         public async Task<string> GetToken(T request)
         {
-            var hashId= request.GetIdentifier() ;
+            var hashId = request.GetIdentifier();
             var newToken = new Token<V>(hashId, _expirate, _removeAction);
             newToken.IsRequested();
             var token = _counters.GetOrAdd(hashId, newToken);
@@ -39,11 +39,14 @@ namespace Airports.Contract
                 {
                     token.BlockingAction(() =>
                     {
-                        token = _counters.AddOrUpdate(hashId, newToken, (x, o) => newToken);
+                        token = _counters.AddOrUpdate(hashId, newToken, (x, o) =>
+                        {
+                            o.Dispose();
+                            return newToken;
+                        });
                         if (token.Equals(newToken))
                         {
                             OnRemove(hashId);
-                            token.Dispose();
                         }
                     });
                 }
@@ -64,7 +67,7 @@ namespace Airports.Contract
                 OnAdd(request);
             }
             await RunClient(token, request);
-            return await Task.FromResult(hashId); ;
+            return await Task.FromResult(hashId);
         }
 
         public async Task Cancel(string hashId)
@@ -119,16 +122,15 @@ namespace Airports.Contract
                 {
                     TryRemove(token, hashId);
                     OnRemove(hashId);
-                    token.Dispose();
-                }                
+                }
+                return data;
             }
             return await Task.FromResult(default(V));
         }
         private async Task RunClient(Token<V> token, T request)
-        { 
+        {
             if (token.Init())
             {
-
                 token.Awaiter = Task.Run(async () =>
                   {
                       var client = _clients.GetNext();
@@ -155,7 +157,7 @@ namespace Airports.Contract
 
         private void CancelError(Token<V> token, T request)
         {
-            string hashId= request.GetIdentifier();
+            string hashId = request.GetIdentifier();
             token.IsCancel(true);
             TryRemove(token, hashId);
         }
@@ -182,22 +184,23 @@ namespace Airports.Contract
 
         private class Token<V> : IDisposable
         {
-            internal Token(string hashId, TimeSpan expire, Func<Token<V>, string,bool> removeAction)
+            internal Token(string hashId, TimeSpan expire, Func<Token<V>, string, bool> removeAction)
             {
                 _source = new CancellationTokenSource();
                 CancelToken = _source.Token;
                 _id = hashId;
                 _timer = new System.Timers.Timer(expire.TotalMilliseconds);
                 _timer.AutoReset = false;
-                _timer.Elapsed += (s,e) =>
+                _timer.Elapsed += (s, e) =>
                 {
                     if (_setter == 1)
                     {
                         removeAction(this, _id);
                         _timer.Stop();
                     }
-                    else { _timer.Start(); }
-                }; 
+                    else
+                    { _timer.Start(); }
+                };
                 _timer.Start();
             }
             private Task _awaiter;
@@ -213,8 +216,8 @@ namespace Airports.Contract
 
             internal V Data
             {
-                get => _data; 
-                set => _data = Interlocked.CompareExchange(ref _setter, 1, 0) == 0 ? value: _data;
+                get => _data;
+                set => _data = Interlocked.CompareExchange(ref _setter, 1, 0) == 0 ? value : _data;
             }
             internal CancellationToken CancelToken { get; }
 
@@ -236,7 +239,7 @@ namespace Airports.Contract
                     return CounterLockAction(() =>
                     {
                         if (Interlocked.Increment(ref _counter) > 0)
-                        { 
+                        {
                             return true;
                         }
                         else
@@ -336,7 +339,8 @@ namespace Airports.Contract
                 }
                 return success;
             }
-            internal async Task<V> Awaiting() {
+            internal async Task<V> Awaiting()
+            {
                 await _awaiter;
                 return await Task.FromResult(_data);
             }
@@ -345,7 +349,7 @@ namespace Airports.Contract
                 _lock?.Dispose();
                 _source?.Dispose();
                 _timer?.Dispose();
-            }            
+            }
         }
     }
 }
