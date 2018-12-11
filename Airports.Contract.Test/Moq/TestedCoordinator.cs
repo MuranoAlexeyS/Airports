@@ -17,7 +17,7 @@ namespace Airports.Contract.Test.Moq
         private readonly Action<string> _onRead;
         
 
-        public TestedCoordinator(IClientBalancer<RequestMoq, ResponseMoq> clients,  
+        public TestedCoordinator(IDispatcher<RequestMoq, ResponseMoq> clients,  
             Action<RequestMoq, string, Exception> onError = null,
             Action<RequestMoq> onCancel = null,
             Action<RequestMoq> onAdd = null,

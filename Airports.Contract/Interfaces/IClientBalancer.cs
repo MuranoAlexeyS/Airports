@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace Airports.Contract.Interfaces
 {
-    public interface IClientBalancer<T, V>
+    public interface IDispatcher<T, V>
     {
-        IClient<T,V> GetNext();
+        IClient<T, V> GetNext();
     }
 }

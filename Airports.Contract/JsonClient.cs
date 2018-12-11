@@ -19,15 +19,22 @@ namespace Airports.Contract
         {
             using (var reqM = new HttpRequestMessage(HttpMethod.Get, uri))
             {
-                var resM = await _baseHttp.SendAsync(reqM, token).ConfigureAwait(false);
-                if (resM.IsSuccessStatusCode)
+                try
                 {
-                    var data = await resM.Content.ReadAsStringAsync();
-                    return await Task.Factory.StartNew<T>(() => JsonConvert.DeserializeObject<T>(data));
+                    var resM = await _baseHttp.SendAsync(reqM, token).ConfigureAwait(false);
+                    if (resM.IsSuccessStatusCode)
+                    {
+                        var data = await resM.Content.ReadAsStringAsync();
+                        return await Task.Factory.StartNew<T>(() => JsonConvert.DeserializeObject<T>(data));
+                    }
+                    resM.EnsureSuccessStatusCode();
+                    return default(T);
                 }
-                resM.EnsureSuccessStatusCode();
-                return default(T);
-            }               
+                catch (OperationCanceledException)
+                {
+                    return default(T);
+                }
+            }
         }
     }
 }

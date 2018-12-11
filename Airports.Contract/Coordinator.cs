@@ -13,14 +13,14 @@ namespace Airports.Contract
 {
     public abstract class ReduceCoordinator<T, V> : ICoordinator<T, Response<V>> where T : class, IRequest
     {
-        public ReduceCoordinator(IClientBalancer<T, V> clients, TimeSpan expirate)
+        public ReduceCoordinator(IDispatcher<T, V> clients, TimeSpan expirate)
         {
             this._clients = clients;
             this._expirate = expirate;
             _removeAction = (x, y) => TryRemove(x, y);
         }
 
-        private readonly IClientBalancer<T, V> _clients;
+        private readonly IDispatcher<T, V> _clients;
         private readonly ConcurrentDictionary<string, Token<V>> _counters = new ConcurrentDictionary<string, Token<V>>();
         private readonly Func<Token<V>, string, bool> _removeAction;
         private readonly TimeSpan _expirate;

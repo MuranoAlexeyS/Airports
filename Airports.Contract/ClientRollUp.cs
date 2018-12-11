@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Airports.Contract
 {
-    public abstract class ClientRollup<T, V> : IClientBalancer<T, V>
+    public abstract class ClientRollup<T, V> : IDispatcher<T, V>
     {
         private readonly IReadOnlyList<IClient<T, V>> _clients;
         private int _counter = 0;
